@@ -1,4 +1,3 @@
-#include "uv.h"
 #include <appling.h>
 #include <assert.h>
 #include <bare.h>
