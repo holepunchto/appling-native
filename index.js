@@ -88,6 +88,10 @@ class Lock {
     this._handle = binding.lock(dir, this, this._onlock, this._onunlock)
   }
 
+  get dir() {
+    return this._dir
+  }
+
   unlock() {
     if (this._unlocked) return Promise.resolve()
 
