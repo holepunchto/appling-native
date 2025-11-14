@@ -98,7 +98,7 @@ class Lock {
     return this._promise
   }
 
-  [Symbol.disposeAsync]() {
+  [Symbol.asyncDispose]() {
     return this.unlock()
   }
 
