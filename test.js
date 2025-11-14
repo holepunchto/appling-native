@@ -9,3 +9,8 @@ test('lock', async (t) => {
   const lock = await appling.lock('test/fixtures/platform')
   await lock.unlock()
 })
+
+test('resolve', async (t) => {
+  const platform = await appling.resolve()
+  console.log(platform.path)
+})
