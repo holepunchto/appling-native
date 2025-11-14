@@ -18,6 +18,10 @@ class App {
 
     return id.subarray(0, id.indexOf(0)).toString()
   }
+
+  open(arg = null) {
+    binding.open(this._handle, arg)
+  }
 }
 
 exports.App = App

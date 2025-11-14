@@ -636,6 +636,54 @@ appling_native_launch(js_env_t *env, js_callback_info_t *info) {
 }
 
 static js_value_t *
+appling_native_open(js_env_t *env, js_callback_info_t *info) {
+  int err;
+
+  size_t argc = 2;
+  js_value_t *argv[2];
+
+  err = js_get_callback_info(env, info, &argc, argv, NULL, NULL);
+  assert(err == 0);
+
+  assert(argc == 2);
+
+  appling_native_app_t *app;
+  err = js_get_arraybuffer_info(env, argv[0], (void **) &app, NULL);
+  assert(err == 0);
+
+  bool has_arg;
+  err = js_is_string(env, argv[1], &has_arg);
+  assert(err == 0);
+
+  utf8_t *arg = NULL;
+
+  if (has_arg) {
+    size_t len;
+    err = js_get_value_string_utf8(env, argv[1], NULL, 0, &len);
+    assert(err == 0);
+
+    len += 1 /* NULL */;
+
+    arg = malloc(len);
+    err = js_get_value_string_utf8(env, argv[1], arg, len, NULL);
+    assert(err == 0);
+  }
+
+  err = appling_open(&app->handle, (char *) arg);
+
+  free(arg);
+
+  if (err < 0) {
+    err = js_throw_error(env, uv_err_name(err), uv_strerror(err));
+    assert(err == 0);
+
+    return NULL;
+  }
+
+  return NULL;
+}
+
+static js_value_t *
 appling_native_exports(js_env_t *env, js_value_t *exports) {
   int err;
 
@@ -657,6 +705,7 @@ appling_native_exports(js_env_t *env, js_value_t *exports) {
   V("ready", appling_native_ready)
   V("preflight", appling_native_preflight)
   V("launch", appling_native_launch)
+  V("open", appling_native_open)
 #undef V
 
   return exports;
