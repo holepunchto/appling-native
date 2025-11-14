@@ -83,6 +83,7 @@ exports.parse = function parse(input, encoding = 'utf8') {
 class Lock {
   constructor(dir) {
     this._reset()
+    this._dir = null
     this._unlocked = false
     this._handle = binding.lock(dir, this, this._onlock, this._onunlock)
   }
@@ -110,9 +111,9 @@ class Lock {
     this._reject = reject
   }
 
-  _onlock(err) {
+  _onlock(err, dir) {
     if (err) this._reject(err)
-    else this._resolve()
+    else this._resolve(dir)
   }
 
   _onunlock(err) {
@@ -124,7 +125,7 @@ class Lock {
 
 exports.lock = async function lock(dir = null) {
   const req = new Lock(dir)
-  await req._promise
+  req._dir = await req._promise
   return req
 }
 

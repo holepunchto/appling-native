@@ -215,7 +215,7 @@ appling_native__on_lock(appling_lock_t *handle, int status) {
   err = js_get_reference_value(env, req->on_lock, &on_lock);
   assert(err == 0);
 
-  js_value_t *argv[1];
+  js_value_t *argv[2];
 
   if (status < 0) {
     js_value_t *code;
@@ -229,12 +229,18 @@ appling_native__on_lock(appling_lock_t *handle, int status) {
     err = js_create_error(env, code, message, &argv[0]);
     assert(err == 0);
 
+    err = js_get_null(env, &argv[1]);
+    assert(err == 0);
+
     if (req->exiting) {
       err = js_finish_deferred_teardown_callback(teardown);
       assert(err == 0);
     }
   } else {
     err = js_get_null(env, &argv[0]);
+    assert(err == 0);
+
+    err = js_create_string_utf8(env, (utf8_t *) req->handle.dir, -1, &argv[1]);
     assert(err == 0);
 
     req->locked = true;
@@ -250,7 +256,7 @@ appling_native__on_lock(appling_lock_t *handle, int status) {
   }
 
   if (!req->exiting) {
-    err = js_call_function(env, ctx, on_lock, 1, argv, NULL);
+    err = js_call_function(env, ctx, on_lock, 2, argv, NULL);
     (void) err;
   }
 
