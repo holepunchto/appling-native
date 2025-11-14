@@ -1,0 +1,335 @@
+#include "uv.h"
+#include <appling.h>
+#include <assert.h>
+#include <bare.h>
+#include <js.h>
+#include <stdlib.h>
+#include <utf.h>
+#include <uv.h>
+
+typedef struct {
+  appling_link_t handle;
+} appling_native_link_t;
+
+typedef struct {
+  appling_lock_t handle;
+
+  js_env_t *env;
+  js_ref_t *ctx;
+  js_ref_t *on_lock;
+  js_ref_t *on_unlock;
+
+  bool exiting;
+  bool locked;
+  bool unlocking;
+
+  js_deferred_teardown_t *teardown;
+} appling_native_lock_t;
+
+static js_value_t *
+appling_native_parse(js_env_t *env, js_callback_info_t *info) {
+  int err;
+
+  size_t argc = 1;
+  js_value_t *argv[1];
+
+  err = js_get_callback_info(env, info, &argc, argv, NULL, NULL);
+  assert(err == 0);
+
+  assert(argc == 1);
+
+  size_t len;
+  err = js_get_value_string_utf8(env, argv[0], NULL, 0, &len);
+  assert(err == 0);
+
+  len += 1 /* NULL */;
+
+  utf8_t *input = malloc(len);
+  err = js_get_value_string_utf8(env, argv[0], input, len, NULL);
+  assert(err == 0);
+
+  js_value_t *handle;
+
+  appling_native_link_t *link;
+  err = js_create_arraybuffer(env, sizeof(appling_native_link_t), (void **) &link, &handle);
+  assert(err == 0);
+
+  err = appling_parse((char *) input, &link->handle);
+
+  free(input);
+
+  if (err < 0) {
+    err = js_throw_error(env, uv_err_name(err), uv_strerror(err));
+    assert(err == 0);
+
+    return NULL;
+  }
+
+  return handle;
+}
+
+static void
+appling_native__on_unlock(appling_lock_t *handle, int status) {
+  int err;
+
+  appling_native_lock_t *req = (appling_native_lock_t *) handle;
+
+  js_env_t *env = req->env;
+
+  js_deferred_teardown_t *teardown = req->teardown;
+
+  js_handle_scope_t *scope;
+  err = js_open_handle_scope(env, &scope);
+  assert(err == 0);
+
+  js_value_t *ctx;
+  err = js_get_reference_value(env, req->ctx, &ctx);
+  assert(err == 0);
+
+  js_value_t *on_unlock;
+  err = js_get_reference_value(env, req->on_unlock, &on_unlock);
+  assert(err == 0);
+
+  err = js_delete_reference(env, req->on_lock);
+  assert(err == 0);
+
+  err = js_delete_reference(env, req->on_unlock);
+  assert(err == 0);
+
+  err = js_delete_reference(env, req->ctx);
+  assert(err == 0);
+
+  js_value_t *argv[1];
+
+  if (status < 0) {
+    js_value_t *code;
+    err = js_create_string_utf8(env, (const utf8_t *) uv_err_name(status), -1, &code);
+    assert(err == 0);
+
+    js_value_t *message;
+    err = js_create_string_utf8(env, (const utf8_t *) uv_strerror(status), -1, &message);
+    assert(err == 0);
+
+    err = js_create_error(env, code, message, &argv[0]);
+    assert(err == 0);
+  } else {
+    err = js_get_null(env, &argv[0]);
+    assert(err == 0);
+  }
+
+  if (!req->exiting) {
+    err = js_call_function(env, ctx, on_unlock, 1, argv, NULL);
+    (void) err;
+  }
+
+  err = js_close_handle_scope(env, scope);
+  assert(err == 0);
+
+  err = js_finish_deferred_teardown_callback(teardown);
+  assert(err == 0);
+}
+
+static void
+appling_native__on_lock(appling_lock_t *handle, int status) {
+  int err;
+
+  appling_native_lock_t *req = (appling_native_lock_t *) handle;
+
+  js_env_t *env = req->env;
+
+  js_deferred_teardown_t *teardown = req->teardown;
+
+  js_handle_scope_t *scope;
+  err = js_open_handle_scope(env, &scope);
+  assert(err == 0);
+
+  js_value_t *ctx;
+  err = js_get_reference_value(env, req->ctx, &ctx);
+  assert(err == 0);
+
+  js_value_t *on_lock;
+  err = js_get_reference_value(env, req->on_lock, &on_lock);
+  assert(err == 0);
+
+  js_value_t *argv[1];
+
+  if (status < 0) {
+    js_value_t *code;
+    err = js_create_string_utf8(env, (const utf8_t *) uv_err_name(status), -1, &code);
+    assert(err == 0);
+
+    js_value_t *message;
+    err = js_create_string_utf8(env, (const utf8_t *) uv_strerror(status), -1, &message);
+    assert(err == 0);
+
+    err = js_create_error(env, code, message, &argv[0]);
+    assert(err == 0);
+
+    if (req->exiting) {
+      err = js_finish_deferred_teardown_callback(teardown);
+      assert(err == 0);
+    }
+  } else {
+    err = js_get_null(env, &argv[0]);
+    assert(err == 0);
+
+    req->locked = true;
+
+    if (req->exiting) {
+      uv_loop_t *loop;
+      err = js_get_env_loop(env, &loop);
+      assert(err == 0);
+
+      err = appling_unlock(loop, &req->handle, appling_native__on_unlock);
+      assert(err == 0);
+    }
+  }
+
+  if (!req->exiting) {
+    err = js_call_function(env, ctx, on_lock, 1, argv, NULL);
+    (void) err;
+  }
+
+  err = js_close_handle_scope(env, scope);
+  assert(err == 0);
+}
+
+static void
+appling_native__on_lock_teardown(js_deferred_teardown_t *teardown, void *data) {
+  int err;
+
+  appling_native_lock_t *req = data;
+
+  req->exiting = true;
+
+  if (!req->locked || req->unlocking) return;
+
+  js_env_t *env = req->env;
+
+  uv_loop_t *loop;
+  err = js_get_env_loop(env, &loop);
+  assert(err == 0);
+
+  err = appling_unlock(loop, &req->handle, appling_native__on_unlock);
+  assert(err == 0);
+}
+
+static js_value_t *
+appling_native_lock(js_env_t *env, js_callback_info_t *info) {
+  int err;
+
+  size_t argc = 4;
+  js_value_t *argv[4];
+
+  err = js_get_callback_info(env, info, &argc, argv, NULL, NULL);
+  assert(err == 0);
+
+  assert(argc == 4);
+
+  size_t len;
+  err = js_get_value_string_utf8(env, argv[0], NULL, 0, &len);
+  assert(err == 0);
+
+  len += 1 /* NULL */;
+
+  utf8_t *dir = malloc(len);
+  err = js_get_value_string_utf8(env, argv[0], dir, len, NULL);
+  assert(err == 0);
+
+  uv_loop_t *loop;
+  err = js_get_env_loop(env, &loop);
+  assert(err == 0);
+
+  js_value_t *handle;
+
+  appling_native_lock_t *req;
+  err = js_create_arraybuffer(env, sizeof(appling_native_lock_t), (void **) &req, &handle);
+  assert(err == 0);
+
+  req->env = env;
+  req->exiting = false;
+  req->locked = false;
+  req->unlocking = false;
+
+  err = appling_lock(loop, &req->handle, (char *) dir, appling_native__on_lock);
+
+  free(dir);
+
+  if (err < 0) {
+    err = js_throw_error(env, uv_err_name(err), uv_strerror(err));
+    assert(err == 0);
+
+    return NULL;
+  }
+
+  err = js_create_reference(env, argv[1], 1, &req->ctx);
+  assert(err == 0);
+
+  err = js_create_reference(env, argv[2], 1, &req->on_lock);
+  assert(err == 0);
+
+  err = js_create_reference(env, argv[3], 1, &req->on_unlock);
+  assert(err == 0);
+
+  err = js_add_deferred_teardown_callback(env, appling_native__on_lock_teardown, (void *) req, &req->teardown);
+  assert(err == 0);
+
+  return handle;
+}
+
+static js_value_t *
+appling_native_unlock(js_env_t *env, js_callback_info_t *info) {
+  int err;
+
+  size_t argc = 1;
+  js_value_t *argv[1];
+
+  err = js_get_callback_info(env, info, &argc, argv, NULL, NULL);
+  assert(err == 0);
+
+  assert(argc == 1);
+
+  appling_native_lock_t *req;
+  err = js_get_arraybuffer_info(env, argv[0], (void **) &req, NULL);
+  assert(err == 0);
+
+  uv_loop_t *loop;
+  err = js_get_env_loop(env, &loop);
+  assert(err == 0);
+
+  err = appling_unlock(loop, &req->handle, appling_native__on_unlock);
+
+  if (err < 0) {
+    err = js_throw_error(env, uv_err_name(err), uv_strerror(err));
+    assert(err == 0);
+
+    return NULL;
+  }
+
+  req->unlocking = true;
+
+  return NULL;
+}
+
+static js_value_t *
+appling_native_exports(js_env_t *env, js_value_t *exports) {
+  int err;
+
+#define V(name, fn) \
+  { \
+    js_value_t *val; \
+    err = js_create_function(env, name, -1, fn, NULL, &val); \
+    assert(err == 0); \
+    err = js_set_named_property(env, exports, name, val); \
+    assert(err == 0); \
+  }
+
+  V("parse", appling_native_parse)
+  V("lock", appling_native_lock)
+  V("unlock", appling_native_unlock)
+#undef V
+
+  return exports;
+}
+
+BARE_MODULE(appling_native, appling_native_exports)
