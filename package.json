@@ -1,6 +1,6 @@
 {
   "name": "appling-native",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "libappling bindings for Bare",
   "exports": {
     "./package": "./package.json",
