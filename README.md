@@ -10,6 +10,10 @@
 
 Construct an application descriptor for the application identified by `id` and an entry point of `path`. If not specified the current executable path is used.
 
+```js
+const app = new appling.App('pear://keet')
+```
+
 #### `app.path`
 
 The full path to the application.
@@ -22,11 +26,21 @@ The identifier of the application.
 
 Open the app and pass it an optional argument, such as a `pear://` invite link.
 
+```js
+app.open('pear://keet/<invite>')
+```
+
 ### `Lock`
 
 #### `const lock = await appling.lock([directory])`
 
 Grab a lock on the Pear platform installation at `directory`.
+
+```js
+await using lock = await appling.lock()
+
+console.log(lock.dir)
+```
 
 #### `lock.dir`
 
@@ -60,6 +74,16 @@ The optional data of the link.
 
 Resolve the Pear platform installation at `directory`. If not specified the default location is used. An exception will be thrown if no viable platform installation is found.
 
+```js
+try {
+  const platform = await appling.resolve()
+
+  console.log(platform.path)
+} catch {
+  // No platform found
+}
+```
+
 #### `platform.path`
 
 The full path to the platform installation.
@@ -68,13 +92,31 @@ The full path to the platform installation.
 
 Check if the application identified by `link` is ready to launch. `link` may be string a string, in which case it will be parsed first. If `false` is returned preflight should be run.
 
+```js
+if (platform.ready('pear://keet')) {
+  // Launch Keet
+} else {
+  // Run preflight for Keet
+}
+```
+
 #### `platform.preflight(link)`
 
-Run preflight for the application identified by `link`.
+Run preflight for the application identified by `link`. `link` may be string a string, in which case it will be parsed first.
+
+```js
+platform.preflight('pear://keet')
+```
 
 #### `platform.launch(app, link, name)`
 
-Launch `app` with `link` and a human-readable `name`. This call may or may not return on success.
+Launch `app` with `link` and a human-readable `name`. `link` may be string a string, in which case it will be parsed first. This call may or may not return on success.
+
+```js
+const app = new appling.App('pear://keet')
+
+platform.launch(app, 'pear://keet/<invite>', 'Keet')
+```
 
 ## License
 
