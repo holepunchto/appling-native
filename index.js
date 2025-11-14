@@ -1,4 +1,26 @@
+const os = require('bare-os')
 const binding = require('./binding')
+
+class App {
+  constructor(id, path = os.execPath()) {
+    this._handle = binding.app(path, id)
+    this._view = Buffer.from(this._handle)
+  }
+
+  get path() {
+    const path = this._view.subarray(0, 4097)
+
+    return path.subarray(0, path.indexOf(0)).toString()
+  }
+
+  get id() {
+    const id = this._view.subarray(4097)
+
+    return id.subarray(0, id.indexOf(0)).toString()
+  }
+}
+
+exports.App = App
 
 class Platform {
   constructor() {
@@ -22,6 +44,12 @@ class Platform {
     if (typeof link === 'string') link = new Link(link)
 
     return binding.preflight(this._handle, link._handle)
+  }
+
+  launch(app, link, name) {
+    if (typeof link === 'string') link = new Link(link)
+
+    binding.launch(this._handle, app._handle, link._handle, name)
   }
 }
 

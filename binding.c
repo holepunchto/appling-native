@@ -8,6 +8,10 @@
 #include <uv.h>
 
 typedef struct {
+  appling_app_t handle;
+} appling_native_app_t;
+
+typedef struct {
   appling_platform_t handle;
 } appling_native_platform_t;
 
@@ -51,6 +55,38 @@ appling_native_platform(js_env_t *env, js_callback_info_t *info) {
   appling_native_platform_t *platform;
   err = js_create_arraybuffer(env, sizeof(appling_native_platform_t), (void **) &platform, &handle);
   assert(err == 0);
+
+  return handle;
+}
+
+static js_value_t *
+appling_native_app(js_env_t *env, js_callback_info_t *info) {
+  int err;
+
+  size_t argc = 2;
+  js_value_t *argv[2];
+
+  err = js_get_callback_info(env, info, &argc, argv, NULL, NULL);
+  assert(err == 0);
+
+  assert(argc == 2);
+
+  appling_path_t path;
+  err = js_get_value_string_utf8(env, argv[0], (utf8_t *) path, sizeof(appling_path_t), NULL);
+  assert(err == 0);
+
+  appling_id_t id;
+  err = js_get_value_string_utf8(env, argv[1], (utf8_t *) id, sizeof(appling_id_t), NULL);
+  assert(err == 0);
+
+  js_value_t *handle;
+
+  appling_native_app_t *app;
+  err = js_create_arraybuffer(env, sizeof(appling_native_app_t), (void **) &app, &handle);
+  assert(err == 0);
+
+  memcpy(&app->handle.path, path, sizeof(app->handle.path));
+  memcpy(&app->handle.id, id, sizeof(app->handle.id));
 
   return handle;
 }
@@ -552,6 +588,54 @@ appling_native_preflight(js_env_t *env, js_callback_info_t *info) {
 }
 
 static js_value_t *
+appling_native_launch(js_env_t *env, js_callback_info_t *info) {
+  int err;
+
+  size_t argc = 4;
+  js_value_t *argv[4];
+
+  err = js_get_callback_info(env, info, &argc, argv, NULL, NULL);
+  assert(err == 0);
+
+  assert(argc == 4);
+
+  appling_native_platform_t *platform;
+  err = js_get_arraybuffer_info(env, argv[0], (void **) &platform, NULL);
+  assert(err == 0);
+
+  appling_native_app_t *app;
+  err = js_get_arraybuffer_info(env, argv[1], (void **) &app, NULL);
+  assert(err == 0);
+
+  appling_native_link_t *link;
+  err = js_get_arraybuffer_info(env, argv[2], (void **) &link, NULL);
+  assert(err == 0);
+
+  size_t len;
+  err = js_get_value_string_utf8(env, argv[3], NULL, 0, &len);
+  assert(err == 0);
+
+  len += 1 /* NULL */;
+
+  utf8_t *name = malloc(len);
+  err = js_get_value_string_utf8(env, argv[3], name, len, NULL);
+  assert(err == 0);
+
+  err = appling_launch(&platform->handle, &app->handle, &link->handle, (char *) name);
+
+  free(name);
+
+  if (err < 0) {
+    err = js_throw_error(env, uv_err_name(err), uv_strerror(err));
+    assert(err == 0);
+
+    return NULL;
+  }
+
+  return NULL;
+}
+
+static js_value_t *
 appling_native_exports(js_env_t *env, js_value_t *exports) {
   int err;
 
@@ -564,6 +648,7 @@ appling_native_exports(js_env_t *env, js_value_t *exports) {
     assert(err == 0); \
   }
 
+  V("app", appling_native_app)
   V("platform", appling_native_platform)
   V("parse", appling_native_parse)
   V("lock", appling_native_lock)
@@ -571,6 +656,7 @@ appling_native_exports(js_env_t *env, js_value_t *exports) {
   V("resolve", appling_native_resolve)
   V("ready", appling_native_ready)
   V("preflight", appling_native_preflight)
+  V("launch", appling_native_launch)
 #undef V
 
   return exports;

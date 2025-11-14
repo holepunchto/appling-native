@@ -16,3 +16,13 @@ test('resolve', async (t) => {
   console.log(platform.ready('pear://keet'))
   platform.preflight('pear://keet')
 })
+
+test('launch', async (t) => {
+  const platform = await appling.resolve()
+
+  platform.launch(
+    new appling.App('pear://keet', '/Applications/Keet.app/Contents/MacOS/Keet'),
+    'pear://keet',
+    'Keet'
+  )
+})
