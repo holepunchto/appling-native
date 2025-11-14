@@ -83,12 +83,14 @@ exports.parse = function parse(input, encoding = 'utf8') {
 class Lock {
   constructor(dir) {
     this._reset()
-    this._handle = binding.lock(dir, this, this._onlock, this._onunlock)
     this._unlocked = false
+    this._handle = binding.lock(dir, this, this._onlock, this._onunlock)
   }
 
   unlock() {
     if (this._unlocked) return Promise.resolve()
+
+    this._reset()
     this._unlocked = true
 
     binding.unlock(this._handle)
@@ -110,10 +112,7 @@ class Lock {
 
   _onlock(err) {
     if (err) this._reject(err)
-    else {
-      this._resolve()
-      this._reset()
-    }
+    else this._resolve()
   }
 
   _onunlock(err) {
