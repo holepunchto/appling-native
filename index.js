@@ -17,6 +17,12 @@ class Platform {
 
     return binding.ready(this._handle, link._handle)
   }
+
+  preflight(link) {
+    if (typeof link === 'string') link = new Link(link)
+
+    return binding.preflight(this._handle, link._handle)
+  }
 }
 
 class Link {
