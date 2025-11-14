@@ -484,6 +484,42 @@ appling_native_resolve(js_env_t *env, js_callback_info_t *info) {
 }
 
 static js_value_t *
+appling_native_ready(js_env_t *env, js_callback_info_t *info) {
+  int err;
+
+  size_t argc = 2;
+  js_value_t *argv[2];
+
+  err = js_get_callback_info(env, info, &argc, argv, NULL, NULL);
+  assert(err == 0);
+
+  assert(argc == 2);
+
+  appling_native_platform_t *platform;
+  err = js_get_arraybuffer_info(env, argv[0], (void **) &platform, NULL);
+  assert(err == 0);
+
+  appling_native_link_t *link;
+  err = js_get_arraybuffer_info(env, argv[1], (void **) &link, NULL);
+  assert(err == 0);
+
+  err = appling_ready(&platform->handle, &link->handle);
+
+  if (err < 0) {
+    err = js_throw_error(env, uv_err_name(err), uv_strerror(err));
+    assert(err == 0);
+
+    return NULL;
+  }
+
+  js_value_t *result;
+  err = js_get_boolean(env, err == 1, &result);
+  assert(err == 0);
+
+  return result;
+}
+
+static js_value_t *
 appling_native_exports(js_env_t *env, js_value_t *exports) {
   int err;
 
@@ -501,6 +537,7 @@ appling_native_exports(js_env_t *env, js_value_t *exports) {
   V("lock", appling_native_lock)
   V("unlock", appling_native_unlock)
   V("resolve", appling_native_resolve)
+  V("ready", appling_native_ready)
 #undef V
 
   return exports;

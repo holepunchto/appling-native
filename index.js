@@ -11,6 +11,12 @@ class Platform {
 
     return path.subarray(0, path.indexOf(0)).toString()
   }
+
+  ready(link) {
+    if (typeof link === 'string') link = new Link(link)
+
+    return binding.ready(this._handle, link._handle)
+  }
 }
 
 class Link {

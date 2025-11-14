@@ -13,4 +13,5 @@ test('lock', async (t) => {
 test('resolve', async (t) => {
   const platform = await appling.resolve()
   console.log(platform.path)
+  console.log(platform.ready('pear://keet'))
 })
