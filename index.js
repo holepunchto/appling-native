@@ -50,10 +50,14 @@ class Platform {
     return binding.preflight(this._handle, link._handle)
   }
 
-  launch(app, link, name) {
+  launch(app, link) {
+    if (typeof app === 'string') app = new App(app)
+
+    if (link === undefined) link = `pear://${app.id}`
+
     if (typeof link === 'string') link = new Link(link)
 
-    binding.launch(this._handle, app._handle, link._handle, name)
+    binding.launch(this._handle, app._handle, link._handle)
   }
 }
 

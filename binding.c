@@ -594,13 +594,13 @@ static js_value_t *
 appling_native_launch(js_env_t *env, js_callback_info_t *info) {
   int err;
 
-  size_t argc = 4;
-  js_value_t *argv[4];
+  size_t argc = 3;
+  js_value_t *argv[3];
 
   err = js_get_callback_info(env, info, &argc, argv, NULL, NULL);
   assert(err == 0);
 
-  assert(argc == 4);
+  assert(argc == 3);
 
   appling_native_platform_t *platform;
   err = js_get_arraybuffer_info(env, argv[0], (void **) &platform, NULL);
@@ -614,19 +614,7 @@ appling_native_launch(js_env_t *env, js_callback_info_t *info) {
   err = js_get_arraybuffer_info(env, argv[2], (void **) &link, NULL);
   assert(err == 0);
 
-  size_t len;
-  err = js_get_value_string_utf8(env, argv[3], NULL, 0, &len);
-  assert(err == 0);
-
-  len += 1 /* NULL */;
-
-  utf8_t *name = malloc(len);
-  err = js_get_value_string_utf8(env, argv[3], name, len, NULL);
-  assert(err == 0);
-
-  err = appling_launch(&platform->handle, &app->handle, &link->handle, (char *) name);
-
-  free(name);
+  err = appling_launch(&platform->handle, &app->handle, &link->handle);
 
   if (err < 0) {
     err = js_throw_error(env, uv_err_name(err), uv_strerror(err));

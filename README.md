@@ -11,7 +11,7 @@
 Construct an application descriptor for the application identified by `id` and an entry point of `path`. If not specified the current executable path is used.
 
 ```js
-const app = new appling.App('pear://keet')
+const app = new appling.App('keet')
 ```
 
 #### `app.path`
@@ -90,7 +90,7 @@ The full path to the platform installation.
 
 #### `const result = platform.ready(link)`
 
-Check if the application identified by `link` is ready to launch. `link` may be string a string, in which case it will be parsed first. If `false` is returned preflight should be run.
+Check if the application identified by `link` is ready to launch. `link` may be a string, in which case it will be parsed first. If `false` is returned preflight should be run.
 
 ```js
 if (platform.ready('pear://keet')) {
@@ -102,20 +102,20 @@ if (platform.ready('pear://keet')) {
 
 #### `platform.preflight(link)`
 
-Run preflight for the application identified by `link`. `link` may be string a string, in which case it will be parsed first.
+Run preflight for the application identified by `link`. `link` may be a string, in which case it will be parsed first.
 
 ```js
 platform.preflight('pear://keet')
 ```
 
-#### `platform.launch(app, link, name)`
+#### `platform.launch(app[, link])`
 
-Launch `app` with `link` and a human-readable `name`. `link` may be string a string, in which case it will be parsed first. This call may or may not return on success.
+Launch `app` with `link`. `link` may be a string, in which case it will be parsed first. If not specified `pear://${app.id}` is used. This call may or may not return on success.
 
 ```js
-const app = new appling.App('pear://keet')
+const app = new appling.App('keet')
 
-platform.launch(app, 'pear://keet/<invite>', 'Keet')
+platform.launch(app, 'pear://keet/<invite>')
 ```
 
 ## License
