@@ -37,7 +37,7 @@ app.open('pear://keet/<invite>')
 Grab a lock on the Pear platform installation at `directory`.
 
 ```js
-await using lock = await appling.lock()
+using lock = await appling.lock()
 
 console.log(lock.dir)
 ```
@@ -46,11 +46,11 @@ console.log(lock.dir)
 
 The full path to the locked platform directory.
 
-#### `await lock.unlock()`
+#### `lock.unlock()`
 
 Release and close the lock.
 
-#### `lock[Symbol.asyncDispose]()`
+#### `lock[Symbol.dispose]()`
 
 Calls `lock.unlock()`.
 

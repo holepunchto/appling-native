@@ -24,13 +24,9 @@ typedef struct {
   js_env_t *env;
   js_ref_t *ctx;
   js_ref_t *on_lock;
-  js_ref_t *on_unlock;
 
   bool exiting;
   bool locked;
-  bool unlocking;
-
-  js_deferred_teardown_t *teardown;
 } appling_native_lock_t;
 
 typedef struct {
@@ -133,63 +129,24 @@ appling_native_parse(js_env_t *env, js_callback_info_t *info) {
 }
 
 static void
-appling_native__on_unlock(appling_lock_t *handle, int status) {
+appling_native__on_lock_teardown(void *data) {
   int err;
 
-  appling_native_lock_t *req = (appling_native_lock_t *) handle;
+  appling_native_lock_t *req = data;
+
+  req->exiting = true;
+
+  if (!req->locked) return;
 
   js_env_t *env = req->env;
 
-  js_deferred_teardown_t *teardown = req->teardown;
-
-  js_handle_scope_t *scope;
-  err = js_open_handle_scope(env, &scope);
-  assert(err == 0);
-
-  js_value_t *ctx;
-  err = js_get_reference_value(env, req->ctx, &ctx);
-  assert(err == 0);
-
-  js_value_t *on_unlock;
-  err = js_get_reference_value(env, req->on_unlock, &on_unlock);
+  err = appling_unlock(&req->handle);
   assert(err == 0);
 
   err = js_delete_reference(env, req->on_lock);
   assert(err == 0);
 
-  err = js_delete_reference(env, req->on_unlock);
-  assert(err == 0);
-
   err = js_delete_reference(env, req->ctx);
-  assert(err == 0);
-
-  js_value_t *argv[1];
-
-  if (status < 0) {
-    js_value_t *code;
-    err = js_create_string_utf8(env, (const utf8_t *) uv_err_name(status), -1, &code);
-    assert(err == 0);
-
-    js_value_t *message;
-    err = js_create_string_utf8(env, (const utf8_t *) uv_strerror(status), -1, &message);
-    assert(err == 0);
-
-    err = js_create_error(env, code, message, &argv[0]);
-    assert(err == 0);
-  } else {
-    err = js_get_null(env, &argv[0]);
-    assert(err == 0);
-  }
-
-  if (!req->exiting) {
-    err = js_call_function(env, ctx, on_unlock, 1, argv, NULL);
-    (void) err;
-  }
-
-  err = js_close_handle_scope(env, scope);
-  assert(err == 0);
-
-  err = js_finish_deferred_teardown_callback(teardown);
   assert(err == 0);
 }
 
@@ -200,8 +157,6 @@ appling_native__on_lock(appling_lock_t *handle, int status) {
   appling_native_lock_t *req = (appling_native_lock_t *) handle;
 
   js_env_t *env = req->env;
-
-  js_deferred_teardown_t *teardown = req->teardown;
 
   js_handle_scope_t *scope;
   err = js_open_handle_scope(env, &scope);
@@ -232,10 +187,7 @@ appling_native__on_lock(appling_lock_t *handle, int status) {
     err = js_get_null(env, &argv[1]);
     assert(err == 0);
 
-    if (req->exiting) {
-      err = js_finish_deferred_teardown_callback(teardown);
-      assert(err == 0);
-    }
+    err = js_remove_teardown_callback(env, appling_native__on_lock_teardown, req);
   } else {
     err = js_get_null(env, &argv[0]);
     assert(err == 0);
@@ -246,11 +198,13 @@ appling_native__on_lock(appling_lock_t *handle, int status) {
     req->locked = true;
 
     if (req->exiting) {
-      uv_loop_t *loop;
-      err = js_get_env_loop(env, &loop);
+      err = appling_unlock(&req->handle);
       assert(err == 0);
 
-      err = appling_unlock(loop, &req->handle, appling_native__on_unlock);
+      err = js_delete_reference(env, req->on_lock);
+      assert(err == 0);
+
+      err = js_delete_reference(env, req->ctx);
       assert(err == 0);
     }
   }
@@ -264,37 +218,17 @@ appling_native__on_lock(appling_lock_t *handle, int status) {
   assert(err == 0);
 }
 
-static void
-appling_native__on_lock_teardown(js_deferred_teardown_t *teardown, void *data) {
-  int err;
-
-  appling_native_lock_t *req = data;
-
-  req->exiting = true;
-
-  if (!req->locked || req->unlocking) return;
-
-  js_env_t *env = req->env;
-
-  uv_loop_t *loop;
-  err = js_get_env_loop(env, &loop);
-  assert(err == 0);
-
-  err = appling_unlock(loop, &req->handle, appling_native__on_unlock);
-  assert(err == 0);
-}
-
 static js_value_t *
 appling_native_lock(js_env_t *env, js_callback_info_t *info) {
   int err;
 
-  size_t argc = 4;
-  js_value_t *argv[4];
+  size_t argc = 3;
+  js_value_t *argv[3];
 
   err = js_get_callback_info(env, info, &argc, argv, NULL, NULL);
   assert(err == 0);
 
-  assert(argc == 4);
+  assert(argc == 3);
 
   bool has_dir;
   err = js_is_string(env, argv[0], &has_dir);
@@ -327,7 +261,6 @@ appling_native_lock(js_env_t *env, js_callback_info_t *info) {
   req->env = env;
   req->exiting = false;
   req->locked = false;
-  req->unlocking = false;
 
   err = appling_lock(loop, &req->handle, (char *) dir, appling_native__on_lock);
 
@@ -346,10 +279,7 @@ appling_native_lock(js_env_t *env, js_callback_info_t *info) {
   err = js_create_reference(env, argv[2], 1, &req->on_lock);
   assert(err == 0);
 
-  err = js_create_reference(env, argv[3], 1, &req->on_unlock);
-  assert(err == 0);
-
-  err = js_add_deferred_teardown_callback(env, appling_native__on_lock_teardown, (void *) req, &req->teardown);
+  err = js_add_teardown_callback(env, appling_native__on_lock_teardown, req);
   assert(err == 0);
 
   return handle;
@@ -371,11 +301,7 @@ appling_native_unlock(js_env_t *env, js_callback_info_t *info) {
   err = js_get_arraybuffer_info(env, argv[0], (void **) &req, NULL);
   assert(err == 0);
 
-  uv_loop_t *loop;
-  err = js_get_env_loop(env, &loop);
-  assert(err == 0);
-
-  err = appling_unlock(loop, &req->handle, appling_native__on_unlock);
+  err = appling_unlock(&req->handle);
 
   if (err < 0) {
     err = js_throw_error(env, uv_err_name(err), uv_strerror(err));
@@ -384,7 +310,14 @@ appling_native_unlock(js_env_t *env, js_callback_info_t *info) {
     return NULL;
   }
 
-  req->unlocking = true;
+  err = js_delete_reference(env, req->on_lock);
+  assert(err == 0);
+
+  err = js_delete_reference(env, req->ctx);
+  assert(err == 0);
+
+  err = js_remove_teardown_callback(env, appling_native__on_lock_teardown, req);
+  assert(err == 0);
 
   return NULL;
 }
@@ -518,7 +451,7 @@ appling_native_resolve(js_env_t *env, js_callback_info_t *info) {
   err = js_create_reference(env, argv[3], 1, &req->on_resolve);
   assert(err == 0);
 
-  err = js_add_deferred_teardown_callback(env, appling_native__on_resolve_teardown, (void *) req, &req->teardown);
+  err = js_add_deferred_teardown_callback(env, appling_native__on_resolve_teardown, req, &req->teardown);
   assert(err == 0);
 
   return handle;

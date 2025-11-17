@@ -86,10 +86,15 @@ exports.parse = function parse(input, encoding = 'utf8') {
 
 class Lock {
   constructor(dir) {
-    this._reset()
     this._dir = null
-    this._unlocked = false
-    this._handle = binding.lock(dir, this, this._onlock, this._onunlock)
+
+    const { promise, resolve, reject } = Promise.withResolvers()
+
+    this._promise = promise
+    this._resolve = resolve
+    this._reject = reject
+
+    this._handle = binding.lock(dir, this, this._onlock)
   }
 
   get dir() {
@@ -97,37 +102,20 @@ class Lock {
   }
 
   unlock() {
-    if (this._unlocked) return Promise.resolve()
-
-    this._reset()
-    this._unlocked = true
+    if (this._handle === null) return
 
     binding.unlock(this._handle)
 
-    return this._promise
+    this._handle = null
   }
 
-  [Symbol.asyncDispose]() {
-    return this.unlock()
-  }
-
-  _reset() {
-    const { promise, resolve, reject } = Promise.withResolvers()
-
-    this._promise = promise
-    this._resolve = resolve
-    this._reject = reject
+  [Symbol.dispose]() {
+    this.unlock()
   }
 
   _onlock(err, dir) {
     if (err) this._reject(err)
     else this._resolve(dir)
-  }
-
-  _onunlock(err) {
-    this._handle = null
-    if (err) this._reject(err)
-    else this._resolve()
   }
 }
 
