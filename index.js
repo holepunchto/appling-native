@@ -44,10 +44,10 @@ class Platform {
     return binding.ready(this._handle, link._handle)
   }
 
-  preflight(link) {
+  preflight(link, cb = noop) {
     if (typeof link === 'string') link = new Link(link)
 
-    return binding.preflight(this._handle, link._handle)
+    return binding.preflight(this._handle, link._handle, cb)
   }
 
   launch(app, link) {
@@ -149,3 +149,5 @@ exports.resolve = async function resolve(dir = null) {
   await req._promise
   return req._platform
 }
+
+function noop() {}

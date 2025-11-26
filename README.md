@@ -100,7 +100,7 @@ if (platform.ready('pear://keet')) {
 }
 ```
 
-#### `platform.preflight(link)`
+#### `platform.preflight(link[, callback])`
 
 Run preflight for the application identified by `link`. `link` may be a string, in which case it will be parsed first.
 

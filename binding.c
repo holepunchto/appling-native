@@ -6,6 +6,14 @@
 #include <utf.h>
 #include <uv.h>
 
+#ifndef thread_local
+#ifdef _WIN32
+#define thread_local __declspec(thread)
+#else
+#define thread_local _Thread_local
+#endif
+#endif
+
 typedef struct {
   appling_app_t handle;
 } appling_native_app_t;
@@ -40,6 +48,13 @@ typedef struct {
 
   js_deferred_teardown_t *teardown;
 } appling_native_resolve_t;
+
+typedef struct {
+  js_env_t *env;
+
+  js_value_t *ctx;
+  js_value_t *on_progress;
+} appling_native_progress_context_t;
 
 static js_value_t *
 appling_native_platform(js_env_t *env, js_callback_info_t *info) {
@@ -493,17 +508,63 @@ appling_native_ready(js_env_t *env, js_callback_info_t *info) {
   return result;
 }
 
+static thread_local appling_native_progress_context_t *appling_native__progress_context;
+
+static void
+appling_native_preflight__on_progress(const appling_progress_info_t *info) {
+  int err;
+
+  appling_native_progress_context_t *context = appling_native__progress_context;
+
+  js_env_t *env = context->env;
+
+  js_handle_scope_t *scope;
+  err = js_open_handle_scope(env, &scope);
+  assert(err == 0);
+
+  js_value_t *result;
+  err = js_create_object(env, &result);
+  assert(err == 0);
+
+#define V(name, value, type) \
+  { \
+    js_value_t *v; \
+    err = js_create_##type(env, value, &v); \
+    assert(err == 0); \
+    err = js_set_named_property(env, result, name, v); \
+    assert(err == 0); \
+  }
+
+  V("peers", info->peers, int64);
+  V("uploadSpeed", info->upload_speed, double);
+  V("uploadedBytes", info->uploaded_bytes, int64);
+  V("uploadedBlocks", info->uploaded_blocks, int64);
+  V("downloadSpeed", info->download_speed, double);
+  V("downloadProgress", info->download_progress, double);
+  V("downloadedBytes", info->downloaded_bytes, int64);
+  V("downloadedBlocks", info->downloaded_blocks, int64);
+#undef V
+
+  js_value_t *args[1] = {result};
+
+  err = js_call_function(env, context->ctx, context->on_progress, 1, args, NULL);
+  (void) err;
+
+  err = js_close_handle_scope(env, scope);
+  assert(err == 0);
+}
+
 static js_value_t *
 appling_native_preflight(js_env_t *env, js_callback_info_t *info) {
   int err;
 
-  size_t argc = 2;
-  js_value_t *argv[2];
+  size_t argc = 3;
+  js_value_t *argv[3];
 
   err = js_get_callback_info(env, info, &argc, argv, NULL, NULL);
   assert(err == 0);
 
-  assert(argc == 2);
+  assert(argc == 3);
 
   appling_native_platform_t *platform;
   err = js_get_arraybuffer_info(env, argv[0], (void **) &platform, NULL);
@@ -513,7 +574,21 @@ appling_native_preflight(js_env_t *env, js_callback_info_t *info) {
   err = js_get_arraybuffer_info(env, argv[1], (void **) &link, NULL);
   assert(err == 0);
 
-  err = appling_preflight(&platform->handle, &link->handle);
+  js_value_t *global;
+  err = js_get_global(env, &global);
+  assert(err == 0);
+
+  appling_native_progress_context_t context = {
+    .env = env,
+    .ctx = global,
+    .on_progress = argv[2],
+  };
+
+  appling_native__progress_context = &context;
+
+  err = appling_preflight(&platform->handle, &link->handle, appling_native_preflight__on_progress);
+
+  appling_native__progress_context = NULL;
 
   if (err < 0) {
     err = js_throw_error(env, uv_err_name(err), uv_strerror(err));
