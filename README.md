@@ -110,7 +110,7 @@ platform.preflight('pear://keet')
 
 #### `platform.launch(app[, link])`
 
-Launch `app` with `link`. `link` may be a string, in which case it will be parsed first. If not specified `pear://${app.id}` is used. This call may or may not return on success.
+Launch `app` with `link`. `link` may be a string, in which case it will be parsed first. If not specified `pear://${app.id}` is used. This call will not return on success.
 
 ```js
 const app = new appling.App('keet')

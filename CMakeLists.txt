@@ -5,7 +5,7 @@ find_package(cmake-fetch REQUIRED PATHS node_modules/cmake-fetch)
 
 project(appling_native C)
 
-fetch_package("github:holepunchto/libappling#a3af0c2")
+fetch_package("github:holepunchto/libappling#d7af1d0")
 fetch_package("github:holepunchto/libcompact#fea2e4a")
 fetch_package("github:holepunchto/liblog#a40c28a")
 fetch_package("github:holepunchto/libpath#22577c7")
