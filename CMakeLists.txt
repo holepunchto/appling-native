@@ -5,9 +5,8 @@ find_package(cmake-fetch REQUIRED PATHS node_modules/cmake-fetch)
 
 project(appling_native C)
 
-fetch_package("github:holepunchto/libappling#d7af1d0")
+fetch_package("github:holepunchto/libappling#765ee79")
 fetch_package("github:holepunchto/libcompact#fea2e4a")
-fetch_package("github:holepunchto/liblog#a40c28a")
 fetch_package("github:holepunchto/libpath#22577c7")
 
 add_bare_module(appling_native)
@@ -23,7 +22,6 @@ target_link_libraries(
   PRIVATE
     $<TARGET_OBJECTS:appling>
     $<TARGET_OBJECTS:compact>
-    $<TARGET_OBJECTS:log>
     $<TARGET_OBJECTS:path>
   PUBLIC
     appling
